@@ -4,6 +4,8 @@ extends Control
 signal hud_changed(score: int, combo: int, mistakes: int, max_mistakes: int, remaining: float)
 signal run_finished(score: int, delivered: int, mistakes: int, completed: bool)
 signal upgrade_requested(options: Array[String])
+signal switch_toggled
+signal delivery_result(correct: bool, combo: int)
 
 const NODE_SPAWN := 0
 const NODE_SWITCH_TOP := 1
@@ -277,7 +279,8 @@ func _deliver(parcel: Dictionary, gate_node: int) -> void:
 	elif gate_node == NODE_BLUE:
 		gate_destination = 2
 
-	if parcel["destination"] == gate_destination:
+	var correct := int(parcel["destination"]) == gate_destination
+	if correct:
 		combo += 1
 		delivered += 1
 		var raw_points := 100 + base_score_bonus + mini(combo, 25) * 8
@@ -292,6 +295,7 @@ func _deliver(parcel: Dictionary, gate_node: int) -> void:
 			combo = 0
 
 	parcels.erase(parcel)
+	delivery_result.emit(correct, combo)
 	_emit_hud()
 
 	if mistakes >= max_mistakes:
@@ -333,6 +337,7 @@ func _gui_input(event: InputEvent) -> void:
 		if press_pos.distance_to(_node_pos(node_id)) <= radius:
 			switch_state[node_id] = 1 - int(switch_state[node_id])
 			Input.vibrate_handheld(18)
+			switch_toggled.emit()
 			queue_redraw()
 			accept_event()
 			return

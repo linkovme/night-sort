@@ -22,8 +22,11 @@ var mistakes_label: Label
 var time_label: Label
 var top_status_label: Label
 var upgrade_overlay: Control
+var sfx: SynthSfx
 
 func _ready() -> void:
+	sfx = SynthSfx.new()
+	add_child(sfx)
 	save_data = SaveStore.load_data()
 	if _ensure_weekly_contract():
 		SaveStore.save_data(save_data)
@@ -279,6 +282,8 @@ func _start_run(daily: bool) -> void:
 	board.hud_changed.connect(_on_hud_changed)
 	board.run_finished.connect(_on_run_finished)
 	board.upgrade_requested.connect(_on_upgrade_requested)
+	board.switch_toggled.connect(sfx.play_switch)
+	board.delivery_result.connect(_on_delivery_result)
 	root.add_child(board)
 
 	var hint := _label("TAP A JUNCTION BEFORE THE PARCEL REACHES IT", 20, NightTheme.TEXT_DIM)
@@ -401,13 +406,21 @@ func _choose_upgrade(upgrade_id: String) -> void:
 	if board == null:
 		return
 	board.apply_upgrade(upgrade_id)
+	sfx.play_upgrade()
 	run_phase = mini(3, run_phase + 1)
 	top_status_label.text = _run_header()
 	if upgrade_overlay != null:
 		upgrade_overlay.queue_free()
 		upgrade_overlay = null
 
+func _on_delivery_result(correct: bool, current_combo: int) -> void:
+	if correct:
+		sfx.play_correct(current_combo)
+	else:
+		sfx.play_wrong()
+
 func _on_run_finished(final_score: int, delivered: int, final_mistakes: int, completed: bool) -> void:
+	sfx.play_complete(completed)
 	last_score = final_score
 	last_delivered = delivered
 	last_mistakes = final_mistakes

@@ -4,12 +4,19 @@ extends RefCounted
 const SAVE_PATH := "user://night_sort_save.json"
 const DEFAULT_DATA := {
 	"best_score": 0,
+	"endless_best": 0,
+	"daily_best": 0,
 	"total_credits": 0,
 	"runs": 0,
-	"daily_best": 0,
+	"total_delivered": 0,
+	"daily_streak": 0,
+	"last_daily_day": -999999,
 	"contract_week": -1,
 	"contract_progress": 0,
 	"contract_claimed": false,
+	"sound_enabled": true,
+	"haptics_enabled": true,
+	"onboarding_seen": false,
 	"unlocked_upgrades": [
 		"turbo_belts",
 		"flow_buffer",

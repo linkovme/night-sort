@@ -235,7 +235,7 @@ func _show_menu() -> void:
 	daily.pressed.connect(func(): _start_run("daily"))
 	root.add_child(daily)
 
-	var endless := _button("БЕСКОНЕЧНАЯ SHIFT")
+	var endless := _button("БЕСКОНЕЧНАЯ СМЕНА")
 	endless.pressed.connect(func(): _start_run("endless"))
 	root.add_child(endless)
 
@@ -273,7 +273,7 @@ func _show_settings() -> void:
 	spacer_top.custom_minimum_size.y = 160
 	root.add_child(spacer_top)
 
-	var kicker := _label("TERMINAL // НАСТРОЙКИ", 22, NightTheme.AMBER)
+	var kicker := _label("ТЕРМИНАЛ // НАСТРОЙКИ", 22, NightTheme.AMBER)
 	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(kicker)
 
@@ -337,7 +337,7 @@ func _show_operations() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(title)
 
-	var credits := _label("AVAILABLE КРЕДИТЫ  %05d" % int(save_data["total_credits"]), 24, NightTheme.TEXT_DIM)
+	var credits := _label("ДОСТУПНО КРЕДИТОВ  %05d" % int(save_data["total_credits"]), 24, NightTheme.TEXT_DIM)
 	credits.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(credits)
 
@@ -394,7 +394,7 @@ func _add_license_button(
 	var text_value := "%s\n%s\n%s" % [
 		title,
 		description,
-		"ОТКРЫТО" if owned else "UNLOCK  %d КРЕДИТЫ" % cost
+		"ОТКРЫТО" if owned else "ОТКРЫТЬ ЗА %d КРЕДИТОВ" % cost
 	]
 	var button := _button(text_value)
 	button.custom_minimum_size.y = 138
@@ -487,7 +487,7 @@ func _run_header() -> String:
 		"daily":
 			return "СМЕНА ДНЯ  //  СЕКТОР %d/3" % mini(run_phase, 3)
 		"endless":
-			return "БЕСКОНЕЧНАЯ LINE  //  WAVE %02d" % run_phase
+			return "БЕСКОНЕЧНАЯ ЛИНИЯ  //  ВОЛНА %02d" % run_phase
 		_:
 			return "НОЧНАЯ СМЕНА  //  СЕКТОР %d/3" % mini(run_phase, 3)
 

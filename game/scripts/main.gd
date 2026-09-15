@@ -137,9 +137,117 @@ func _show_menu() -> void:
 	daily.pressed.connect(func(): _start_run(true))
 	root.add_child(daily)
 
+	var operations := _button("OPERATIONS LICENSES")
+	operations.custom_minimum_size.y = 82
+	operations.add_theme_font_size_override("font_size", 23)
+	operations.pressed.connect(_show_operations)
+	root.add_child(operations)
+
 	var footer := _label("ONE THUMB // 90 SEC // THREE SECTORS", 20, NightTheme.TEXT_DIM)
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(footer)
+
+func _show_operations() -> void:
+	_clear_content()
+
+	var root := VBoxContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 22)
+	content.add_child(root)
+
+	var spacer_top := Control.new()
+	spacer_top.custom_minimum_size.y = 90
+	root.add_child(spacer_top)
+
+	var kicker := _label("OPERATIONS // LICENSE DESK", 22, NightTheme.AMBER)
+	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(kicker)
+
+	var title := _label("Expand the upgrade pool.", 48, NightTheme.TEXT)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(title)
+
+	var credits := _label("AVAILABLE CREDITS  %05d" % int(save_data["total_credits"]), 26, NightTheme.TEXT_DIM)
+	credits.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(credits)
+
+	var info := _label(
+		"Licenses add new choices to future normal shifts. They are sidegrades, not permanent stat boosts. Daily Shift stays standardized for everyone.",
+		24,
+		NightTheme.TEXT_DIM
+	)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.custom_minimum_size.y = 130
+	root.add_child(info)
+
+	var standard := _label(
+		"STANDARD ISSUE\nTurbo Belts // Flow Buffer // Spare Lane // Quality Pay",
+		23,
+		NightTheme.TEXT
+	)
+	standard.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(standard)
+
+	_add_license_button(
+		root,
+		"checkpoint_scan",
+		"CHECKPOINT SCAN",
+		"Next 2 mistakes keep your chain.",
+		300
+	)
+	_add_license_button(
+		root,
+		"priority_contract",
+		"PRIORITY CONTRACT",
+		"One cargo type becomes worth double for the shift.",
+		700
+	)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(spacer)
+
+	var back := _button("BACK TO TERMINAL")
+	back.pressed.connect(_show_menu)
+	root.add_child(back)
+
+func _add_license_button(
+	parent: VBoxContainer,
+	upgrade_id: String,
+	title: String,
+	description: String,
+	cost: int
+) -> void:
+	var owned := _is_upgrade_unlocked(upgrade_id)
+	var text_value := "%s\n%s\n%s" % [
+		title,
+		description,
+		"OWNED" if owned else "UNLOCK  %d CREDITS" % cost
+	]
+	var button := _button(text_value)
+	button.custom_minimum_size.y = 170
+	button.add_theme_font_size_override("font_size", 22)
+	button.disabled = owned or int(save_data["total_credits"]) < cost
+	if not owned:
+		button.pressed.connect(func(): _buy_license(upgrade_id, cost))
+	parent.add_child(button)
+
+func _is_upgrade_unlocked(upgrade_id: String) -> bool:
+	var unlocked: Array = save_data.get("unlocked_upgrades", [])
+	return upgrade_id in unlocked
+
+func _buy_license(upgrade_id: String, cost: int) -> void:
+	if _is_upgrade_unlocked(upgrade_id):
+		return
+	if int(save_data["total_credits"]) < cost:
+		return
+	save_data["total_credits"] = int(save_data["total_credits"]) - cost
+	var unlocked: Array = save_data.get("unlocked_upgrades", []).duplicate()
+	unlocked.append(upgrade_id)
+	save_data["unlocked_upgrades"] = unlocked
+	SaveStore.save_data(save_data)
+	_show_operations()
 
 func _start_run(daily: bool) -> void:
 	current_state = ScreenState.RUN
@@ -181,6 +289,11 @@ func _start_run(daily: bool) -> void:
 	quit.custom_minimum_size.y = 76
 	quit.pressed.connect(_end_shift_early)
 	root.add_child(quit)
+
+	if daily:
+		board.set_unlocked_upgrades(SortBoard.UPGRADE_IDS)
+	else:
+		board.set_unlocked_upgrades(save_data.get("unlocked_upgrades", []))
 
 	var seed_value := _daily_seed() if daily else int(Time.get_unix_time_from_system() * 1000.0) ^ randi()
 	board.start_run(seed_value)

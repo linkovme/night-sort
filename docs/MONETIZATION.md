@@ -3,26 +3,47 @@
 ## Goal
 Earn revenue without making the game worse when ads are present.
 
-## Allowed placements
-1. **Rewarded continue** — at most once per run after failure.
-2. **Rewarded double credits** — optional on the results screen.
-3. **Interstitial** — only between completed runs, never during active sorting.
+## Product rule
+The game must remain enjoyable without watching an ad. Ads may accelerate a voluntary reward or offer one recovery, but they must not become the real core loop.
 
-## Frequency principles
-- No interstitial in the first sessions/tutorial.
-- Never after every run.
-- Initial design target: not more often than roughly once per 8–10 minutes of active use and only at natural breaks. Actual cap will be tuned from retention data.
-- Rewarded ads are initiated by the player.
+## Planned placements
+1. **Rewarded continue** — available at most once in a failed run. The user explicitly chooses it.
+2. **Rewarded double credits** — optional after results. Never required for healthy progression.
+3. **Interstitial** — only at a natural break after completed runs.
+
+## Interstitial frequency guardrails
+The first implementation must enforce all of these:
+- never during active play;
+- never on pause/settings/menu open;
+- never in the first two completed runs of a fresh install;
+- never immediately after a rewarded ad;
+- at least 8 minutes since the previous interstitial;
+- at least 3 completed runs since the previous interstitial;
+- one interstitial opportunity can be skipped freely if the provider has no cached ad.
+
+These are code-level caps, not just dashboard settings.
 
 ## Never
 - No gameplay banner.
-- No ad on pause.
-- No ad when opening settings.
-- No fake “X”.
-- No reward that is secretly required for healthy progression.
+- No fake close button.
+- No forced rewarded ad.
+- No energy/lives timer designed to sell ad views.
+- No hidden probability penalty for players who do not watch ads.
 
 ## Purchase
 A one-time “Remove automatic ads” purchase can remove interstitials. Optional rewarded placements may remain because the player explicitly requests them.
 
-## Implementation rule
-Gameplay talks to an `AdService` interface. The real network SDK is added late, so game logic never depends on a specific ad provider.
+## Technical boundary
+Gameplay will talk only to an `AdService` abstraction. A provider-specific SDK is attached behind it.
+
+Live provider credentials/ad-unit IDs are not stored in this public repository. Development must use provider test IDs.
+
+## Integration gate
+Do not connect a live ad network until:
+- production Android Gradle/AAB path works;
+- target API and store requirements are satisfied;
+- consent/privacy flow is defined;
+- debug/test ad IDs are working;
+- frequency caps are covered by tests or deterministic checks.
+
+A current candidate provider adapter is Google AdMob through a maintained Godot Android plugin, but the game logic must not depend directly on that plugin.

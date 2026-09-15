@@ -48,6 +48,8 @@ var switch_state := {
 
 var parcels: Array[Dictionary] = []
 var rng := RandomNumberGenerator.new()
+var upgrade_rng := RandomNumberGenerator.new()
+var effect_rng := RandomNumberGenerator.new()
 var running := false
 var paused_for_upgrade := false
 var endless_mode := false
@@ -96,6 +98,8 @@ func set_haptics_enabled(value: bool) -> void:
 
 func start_run(seed_value: int) -> void:
 	rng.seed = seed_value
+	upgrade_rng.seed = seed_value ^ 0x51A7C3
+	effect_rng.seed = seed_value ^ 0x2D91EF
 	parcels.clear()
 	switch_state[NODE_SWITCH_TOP] = 0
 	switch_state[NODE_SWITCH_LEFT] = 0
@@ -147,7 +151,7 @@ func apply_upgrade(upgrade_id: String) -> void:
 		"quality_pay":
 			base_score_bonus += 35
 		"priority_contract":
-			priority_destination = rng.randi_range(0, 2)
+			priority_destination = effect_rng.randi_range(0, 2)
 		"calm_protocol":
 			speed_multiplier *= 0.88
 			score_multiplier *= 0.88
@@ -226,6 +230,7 @@ func _process(delta: float) -> void:
 
 	for parcel in parcels.duplicate():
 		_advance_parcel(parcel, delta)
+	_enforce_parcel_spacing()
 
 	var time_value := elapsed if endless_mode else remaining
 	var current_second := int(floor(time_value))
@@ -242,7 +247,7 @@ func _pick_upgrade_options() -> Array[String]:
 	var pool: Array[String] = unlocked_upgrade_ids.duplicate()
 	var options: Array[String] = []
 	while options.size() < 3 and not pool.is_empty():
-		var index := rng.randi_range(0, pool.size() - 1)
+		var index := upgrade_rng.randi_range(0, pool.size() - 1)
 		options.append(pool[index])
 		pool.remove_at(index)
 	return options
@@ -314,6 +319,27 @@ func _advance_parcel(parcel: Dictionary, delta: float) -> void:
 		return
 
 	parcel["to"] = _next_node(arrived_node)
+
+func _enforce_parcel_spacing() -> void:
+	var segments := {}
+	for parcel in parcels:
+		var key := "%d:%d" % [int(parcel["from"]), int(parcel["to"])]
+		if not segments.has(key):
+			segments[key] = []
+		segments[key].append(parcel)
+
+	for segment_key in segments.keys():
+		var segment: Array = segments[segment_key]
+		segment.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a["progress"]) > float(b["progress"])
+		)
+		var ahead_progress := 2.0
+		for parcel in segment:
+			var current := float(parcel["progress"])
+			if ahead_progress <= 1.0:
+				current = minf(current, maxf(0.0, ahead_progress - 0.14))
+				parcel["progress"] = current
+			ahead_progress = current
 
 func _next_node(node_id: int) -> int:
 	match node_id:

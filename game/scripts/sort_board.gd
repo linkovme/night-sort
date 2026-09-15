@@ -1,8 +1,9 @@
 class_name SortBoard
 extends Control
 
-signal hud_changed(score: int, combo: int, mistakes: int, remaining: float)
+signal hud_changed(score: int, combo: int, mistakes: int, max_mistakes: int, remaining: float)
 signal run_finished(score: int, delivered: int, mistakes: int, completed: bool)
+signal upgrade_requested(options: Array[String])
 
 const NODE_SPAWN := 0
 const NODE_SWITCH_TOP := 1
@@ -12,8 +13,17 @@ const NODE_RED := 4
 const NODE_GREEN := 5
 const NODE_BLUE := 6
 
-const MAX_MISTAKES := 3
 const RUN_DURATION := 90.0
+const UPGRADE_TIMES := [30.0, 60.0]
+
+const UPGRADE_IDS := [
+	"turbo_belts",
+	"flow_buffer",
+	"spare_lane",
+	"checkpoint_scan",
+	"quality_pay",
+	"priority_contract"
+]
 
 var node_uv := {
 	NODE_SPAWN: Vector2(0.50, 0.055),
@@ -34,6 +44,7 @@ var switch_state := {
 var parcels: Array[Dictionary] = []
 var rng := RandomNumberGenerator.new()
 var running := false
+var paused_for_upgrade := false
 var elapsed := 0.0
 var spawn_clock := 0.0
 var score := 0
@@ -42,6 +53,15 @@ var mistakes := 0
 var delivered := 0
 var parcel_serial := 0
 var _last_hud_second := -1
+var upgrade_index := 0
+
+var max_mistakes := 3
+var score_multiplier := 1.0
+var base_score_bonus := 0
+var spawn_interval_multiplier := 1.0
+var speed_multiplier := 1.0
+var combo_guards := 0
+var priority_destination := -1
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -62,20 +82,100 @@ func start_run(seed_value: int) -> void:
 	delivered = 0
 	parcel_serial = 0
 	_last_hud_second = -1
+	upgrade_index = 0
+	max_mistakes = 3
+	score_multiplier = 1.0
+	base_score_bonus = 0
+	spawn_interval_multiplier = 1.0
+	speed_multiplier = 1.0
+	combo_guards = 0
+	priority_destination = -1
+	paused_for_upgrade = false
 	running = true
 	_emit_hud()
 	queue_redraw()
 
 func stop_run() -> void:
 	running = false
+	paused_for_upgrade = false
 	parcels.clear()
 	queue_redraw()
 
+func apply_upgrade(upgrade_id: String) -> void:
+	match upgrade_id:
+		"turbo_belts":
+			score_multiplier *= 1.30
+			speed_multiplier *= 1.15
+		"flow_buffer":
+			spawn_interval_multiplier *= 1.12
+			score_multiplier *= 0.90
+		"spare_lane":
+			max_mistakes += 1
+			score_multiplier *= 0.92
+		"checkpoint_scan":
+			combo_guards += 2
+		"quality_pay":
+			base_score_bonus += 35
+		"priority_contract":
+			priority_destination = rng.randi_range(0, 2)
+		_:
+			pass
+
+	paused_for_upgrade = false
+	spawn_clock = maxf(spawn_clock, 0.35)
+	_emit_hud()
+	queue_redraw()
+
+func get_upgrade_title(upgrade_id: String) -> String:
+	match upgrade_id:
+		"turbo_belts":
+			return "TURBO BELTS"
+		"flow_buffer":
+			return "FLOW BUFFER"
+		"spare_lane":
+			return "SPARE LANE"
+		"checkpoint_scan":
+			return "CHECKPOINT SCAN"
+		"quality_pay":
+			return "QUALITY PAY"
+		"priority_contract":
+			return "PRIORITY CONTRACT"
+		_:
+			return "UNKNOWN"
+
+func get_upgrade_description(upgrade_id: String) -> String:
+	match upgrade_id:
+		"turbo_belts":
+			return "+30% score  //  +15% belt speed"
+		"flow_buffer":
+			return "+12% time between parcels  //  -10% score"
+		"spare_lane":
+			return "+1 error capacity  //  -8% score"
+		"checkpoint_scan":
+			return "Next 2 mistakes keep your chain"
+		"quality_pay":
+			return "+35 points for every correct parcel"
+		"priority_contract":
+			return "One cargo type becomes worth double"
+		_:
+			return ""
+
+func get_priority_destination() -> int:
+	return priority_destination
+
 func _process(delta: float) -> void:
-	if not running:
+	if not running or paused_for_upgrade:
 		return
 
 	elapsed += delta
+
+	if upgrade_index < UPGRADE_TIMES.size() and elapsed >= UPGRADE_TIMES[upgrade_index]:
+		paused_for_upgrade = true
+		var options := _pick_upgrade_options()
+		upgrade_index += 1
+		upgrade_requested.emit(options)
+		return
+
 	var remaining := maxf(0.0, RUN_DURATION - elapsed)
 	spawn_clock -= delta
 
@@ -96,13 +196,22 @@ func _process(delta: float) -> void:
 
 	queue_redraw()
 
+func _pick_upgrade_options() -> Array[String]:
+	var pool: Array[String] = UPGRADE_IDS.duplicate()
+	var options: Array[String] = []
+	while options.size() < 3 and not pool.is_empty():
+		var index := rng.randi_range(0, pool.size() - 1)
+		options.append(pool[index])
+		pool.remove_at(index)
+	return options
+
 func _current_spawn_interval() -> float:
 	var t := clampf(elapsed / RUN_DURATION, 0.0, 1.0)
-	return lerpf(1.55, 0.62, t)
+	return lerpf(1.55, 0.62, t) * spawn_interval_multiplier
 
 func _current_speed() -> float:
 	var t := clampf(elapsed / RUN_DURATION, 0.0, 1.0)
-	return lerpf(0.24, 0.36, t)
+	return lerpf(0.24, 0.36, t) * speed_multiplier
 
 func _spawn_parcel() -> void:
 	var dest := rng.randi_range(0, 2)
@@ -156,29 +265,36 @@ func _deliver(parcel: Dictionary, gate_node: int) -> void:
 	if parcel["destination"] == gate_destination:
 		combo += 1
 		delivered += 1
-		score += 100 + mini(combo, 25) * 8
+		var raw_points := 100 + base_score_bonus + mini(combo, 25) * 8
+		if priority_destination == int(parcel["destination"]):
+			raw_points *= 2
+		score += int(round(float(raw_points) * score_multiplier))
 	else:
 		mistakes += 1
-		combo = 0
+		if combo_guards > 0:
+			combo_guards -= 1
+		else:
+			combo = 0
 
 	parcels.erase(parcel)
 	_emit_hud()
 
-	if mistakes >= MAX_MISTAKES:
+	if mistakes >= max_mistakes:
 		_finish_run(false)
 
 func _finish_run(completed: bool) -> void:
 	if not running:
 		return
 	running = false
+	paused_for_upgrade = false
 	run_finished.emit(score, delivered, mistakes, completed)
 
 func _emit_hud() -> void:
 	var remaining := maxf(0.0, RUN_DURATION - elapsed)
-	hud_changed.emit(score, combo, mistakes, remaining)
+	hud_changed.emit(score, combo, mistakes, max_mistakes, remaining)
 
 func _gui_input(event: InputEvent) -> void:
-	if not running:
+	if not running or paused_for_upgrade:
 		return
 
 	var press_pos := Vector2.ZERO
@@ -242,6 +358,7 @@ func _draw() -> void:
 		_draw_parcel(parcel)
 
 	_draw_spawn()
+	_draw_priority_marker()
 
 func _draw_belt(from_id: int, to_id: int) -> void:
 	var a := _node_pos(from_id)
@@ -257,7 +374,13 @@ func _draw_belt(from_id: int, to_id: int) -> void:
 		var p := a.lerp(b, t)
 		var direction := (b - a).normalized()
 		var normal := Vector2(-direction.y, direction.x)
-		draw_line(p - normal * 6.0 * scale_factor, p + normal * 6.0 * scale_factor, NightTheme.STEEL_LIGHT, 2.0 * scale_factor, true)
+		draw_line(
+			p - normal * 6.0 * scale_factor,
+			p + normal * 6.0 * scale_factor,
+			NightTheme.STEEL_LIGHT,
+			2.0 * scale_factor,
+			true
+		)
 
 func _draw_switch(node_id: int) -> void:
 	var p := _node_pos(node_id)
@@ -298,7 +421,21 @@ func _draw_parcel(parcel: Dictionary) -> void:
 	var rect := Rect2(p - box_size * 0.5, box_size)
 	draw_rect(rect, NightTheme.PARCEL_EDGE)
 	draw_rect(rect.grow(-4.0 * scale_factor), NightTheme.PARCEL)
-	_draw_destination_mark(p, parcel["destination"], 13.0 * scale_factor, NightTheme.DEST_COLORS[parcel["destination"]])
+	_draw_destination_mark(
+		p,
+		parcel["destination"],
+		13.0 * scale_factor,
+		NightTheme.DEST_COLORS[parcel["destination"]]
+	)
+	if priority_destination == int(parcel["destination"]):
+		draw_circle(p + Vector2(box_size.x * 0.42, -box_size.y * 0.40), 6.0 * scale_factor, NightTheme.AMBER)
+
+func _draw_priority_marker() -> void:
+	if priority_destination < 0:
+		return
+	var p := _node_pos([NODE_RED, NODE_GREEN, NODE_BLUE][priority_destination])
+	var scale_factor := minf(size.x, size.y) / 1000.0
+	draw_circle(p + Vector2(0, -62.0 * scale_factor), 8.0 * scale_factor, NightTheme.AMBER)
 
 func _draw_destination_mark(p: Vector2, destination: int, radius: float, color: Color) -> void:
 	match destination:
@@ -312,4 +449,7 @@ func _draw_destination_mark(p: Vector2, destination: int, radius: float, color: 
 			])
 			draw_colored_polygon(pts, color)
 		2:
-			draw_rect(Rect2(p - Vector2(radius, radius), Vector2(radius * 2.0, radius * 2.0)), color)
+			draw_rect(
+				Rect2(p - Vector2(radius, radius), Vector2(radius * 2.0, radius * 2.0)),
+				color
+			)

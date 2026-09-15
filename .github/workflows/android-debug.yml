@@ -49,13 +49,12 @@ jobs:
           keytool -genkeypair -v             -keystore "$HOME/.local/share/godot/keystores/debug.keystore"             -storepass android             -alias androiddebugkey             -keypass android             -keyalg RSA             -keysize 2048             -validity 10000             -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Export APK
-        env:
-          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ env.HOME }}/.local/share/godot/keystores/debug.keystore
-          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
-          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
           godot --headless --path game --editor --quit
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.local/share/godot/keystores/debug.keystore"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android"
           godot --headless --path game --export-debug "Android" "$GITHUB_WORKSPACE/build/night-sort-debug.apk"
           test -s build/night-sort-debug.apk
 

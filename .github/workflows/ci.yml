@@ -3,8 +3,18 @@ name: Godot smoke test
 on:
   push:
     branches: [main]
+    paths:
+      - "game/**"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "game/**"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
+
+concurrency:
+  group: godot-smoke-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
@@ -24,6 +34,9 @@ jobs:
 
       - name: Import and parse project
         run: godot --headless --path game --editor --quit
+
+      - name: Ad policy tests
+        run: godot --headless --path game --script res://tests/ad_policy_test.gd
 
       - name: Launch smoke test
         run: godot --headless --path game --quit-after 10

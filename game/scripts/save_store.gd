@@ -17,6 +17,7 @@ const DEFAULT_DATA := {
 	"sound_enabled": true,
 	"haptics_enabled": true,
 	"onboarding_seen": false,
+	"onboarding_version": 0,
 	"remove_ads": false,
 	"ad_completed_runs": 0,
 	"ad_runs_since_interstitial": 0,

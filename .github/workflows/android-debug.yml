@@ -20,11 +20,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android packages
+      - name: Prepare Android SDK
         run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          which sdkmanager
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "build-tools;35.0.1" "platforms;android-35"
 

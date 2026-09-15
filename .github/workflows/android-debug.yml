@@ -3,7 +3,14 @@ name: Android debug APK
 on:
   push:
     branches: [main]
+    paths:
+      - "game/**"
+      - ".github/workflows/android-debug.yml"
   workflow_dispatch:
+
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   android:

@@ -2,6 +2,8 @@ extends Control
 
 enum ScreenState { MENU, RUN, RESULTS }
 
+const CONTRACT_BONUS := 500
+
 var save_data: Dictionary
 var current_state := ScreenState.MENU
 var current_mode := "normal"
@@ -9,6 +11,7 @@ var last_score := 0
 var last_delivered := 0
 var last_mistakes := 0
 var last_completed := false
+var last_contract_bonus := 0
 var run_phase := 1
 
 var content: Control
@@ -22,6 +25,8 @@ var upgrade_overlay: Control
 
 func _ready() -> void:
 	save_data = SaveStore.load_data()
+	if _ensure_weekly_contract():
+		SaveStore.save_data(save_data)
 	_build_shell()
 	_show_menu()
 
@@ -51,22 +56,23 @@ func _clear_content() -> void:
 
 func _show_menu() -> void:
 	current_state = ScreenState.MENU
+	_ensure_weekly_contract()
 	_clear_content()
 
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 22)
+	root.add_theme_constant_override("separation", 20)
 	content.add_child(root)
 
 	var spacer_top := Control.new()
-	spacer_top.custom_minimum_size.y = 120
+	spacer_top.custom_minimum_size.y = 80
 	root.add_child(spacer_top)
 
 	var kicker := _label("NIGHT LOGISTICS // HUB A", 24, NightTheme.AMBER)
 	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(kicker)
 
-	var title := _label("NIGHT\nSORT", 86, NightTheme.TEXT)
+	var title := _label("NIGHT\nSORT", 82, NightTheme.TEXT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_constant_override("line_spacing", -10)
 	root.add_child(title)
@@ -75,19 +81,19 @@ func _show_menu() -> void:
 	rule.modulate = NightTheme.STEEL_LIGHT
 	root.add_child(rule)
 
-	var subtitle := _label("Route every parcel before the line breaks.", 30, NightTheme.TEXT_DIM)
+	var subtitle := _label("Route every parcel before the line breaks.", 28, NightTheme.TEXT_DIM)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(subtitle)
 
 	var instruction := _label(
 		"Tap the round junctions. Match color + shape to the three gates.\nEvery 30 seconds, choose how the line evolves.",
-		27,
+		25,
 		NightTheme.TEXT
 	)
 	instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instruction.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	instruction.custom_minimum_size.y = 150
+	instruction.custom_minimum_size.y = 135
 	root.add_child(instruction)
 
 	var stats := _label(
@@ -95,11 +101,29 @@ func _show_menu() -> void:
 			int(save_data["best_score"]),
 			int(save_data["total_credits"])
 		],
-		24,
+		23,
 		NightTheme.TEXT_DIM
 	)
 	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(stats)
+
+	var contract_panel := PanelContainer.new()
+	var contract_style := StyleBoxFlat.new()
+	contract_style.bg_color = NightTheme.PANEL
+	contract_style.border_color = NightTheme.STEEL
+	contract_style.set_border_width_all(2)
+	contract_style.corner_radius_top_left = 8
+	contract_style.corner_radius_top_right = 8
+	contract_style.corner_radius_bottom_left = 8
+	contract_style.corner_radius_bottom_right = 8
+	contract_panel.add_theme_stylebox_override("panel", contract_style)
+	root.add_child(contract_panel)
+
+	var contract_label := _label(_contract_status_text(), 21, NightTheme.TEXT_DIM)
+	contract_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	contract_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	contract_label.custom_minimum_size.y = 92
+	contract_panel.add_child(contract_label)
 
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -282,6 +306,11 @@ func _on_run_finished(final_score: int, delivered: int, final_mistakes: int, com
 	save_data["best_score"] = maxi(int(save_data["best_score"]), final_score)
 	if current_mode == "daily":
 		save_data["daily_best"] = maxi(int(save_data["daily_best"]), final_score)
+
+	last_contract_bonus = _update_weekly_contract(final_score, delivered)
+	if last_contract_bonus > 0:
+		save_data["total_credits"] = int(save_data["total_credits"]) + last_contract_bonus
+
 	SaveStore.save_data(save_data)
 	_show_results(earned)
 
@@ -295,7 +324,7 @@ func _show_results(earned: int) -> void:
 	content.add_child(root)
 
 	var spacer_top := Control.new()
-	spacer_top.custom_minimum_size.y = 190
+	spacer_top.custom_minimum_size.y = 150
 	root.add_child(spacer_top)
 
 	var status_text := "SHIFT COMPLETE" if last_completed else "LINE STOPPED"
@@ -312,18 +341,18 @@ func _show_results(earned: int) -> void:
 	big_score.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(big_score)
 
-	var summary := _label(
-		"SORTED  %03d\nERRORS  %d\nCREDITS  +%d\nBEST  %06d" % [
-			last_delivered,
-			last_mistakes,
-			earned,
-			int(save_data["best_score"])
-		],
-		30,
-		NightTheme.TEXT_DIM
-	)
+	var summary_text := "SORTED  %03d\nERRORS  %d\nCREDITS  +%d\nBEST  %06d" % [
+		last_delivered,
+		last_mistakes,
+		earned,
+		int(save_data["best_score"])
+	]
+	if last_contract_bonus > 0:
+		summary_text += "\nWEEKLY BONUS  +%d" % last_contract_bonus
+
+	var summary := _label(summary_text, 29, NightTheme.TEXT_DIM)
 	summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	summary.add_theme_constant_override("line_spacing", 14)
+	summary.add_theme_constant_override("line_spacing", 12)
 	root.add_child(summary)
 
 	var spacer := Control.new()
@@ -346,6 +375,74 @@ func _show_results(earned: int) -> void:
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(footer)
+
+func _weekly_key() -> int:
+	var unix_time := Time.get_unix_time_from_system()
+	return int((unix_time + 259200.0) / 604800.0)
+
+func _contract_definition() -> Dictionary:
+	match _weekly_key() % 3:
+		0:
+			return {
+				"kind": "deliver",
+				"title": "SORT 180 PARCELS",
+				"goal": 180
+			}
+		1:
+			return {
+				"kind": "runs",
+				"title": "COMPLETE 8 SHIFTS",
+				"goal": 8
+			}
+		_:
+			return {
+				"kind": "score",
+				"title": "EARN 75,000 SCORE",
+				"goal": 75000
+			}
+
+func _ensure_weekly_contract() -> bool:
+	var key := _weekly_key()
+	if int(save_data.get("contract_week", -1)) == key:
+		return false
+	save_data["contract_week"] = key
+	save_data["contract_progress"] = 0
+	save_data["contract_claimed"] = false
+	return true
+
+func _contract_status_text() -> String:
+	var definition := _contract_definition()
+	if bool(save_data["contract_claimed"]):
+		return "WEEKLY CONTRACT // COMPLETE\n%d CREDIT BONUS COLLECTED" % CONTRACT_BONUS
+	var progress := int(save_data["contract_progress"])
+	var goal := int(definition["goal"])
+	return "WEEKLY CONTRACT // %s\n%d / %d    //    REWARD %d" % [
+		String(definition["title"]),
+		mini(progress, goal),
+		goal,
+		CONTRACT_BONUS
+	]
+
+func _update_weekly_contract(final_score: int, delivered: int) -> int:
+	_ensure_weekly_contract()
+	if bool(save_data["contract_claimed"]):
+		return 0
+
+	var definition := _contract_definition()
+	var progress := int(save_data["contract_progress"])
+	match String(definition["kind"]):
+		"deliver":
+			progress += delivered
+		"runs":
+			progress += 1
+		"score":
+			progress += final_score
+
+	save_data["contract_progress"] = progress
+	if progress >= int(definition["goal"]):
+		save_data["contract_claimed"] = true
+		return CONTRACT_BONUS
+	return 0
 
 func _label(text_value: String, font_size: int, color: Color) -> Label:
 	var label := Label.new()

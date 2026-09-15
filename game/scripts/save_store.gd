@@ -17,6 +17,11 @@ const DEFAULT_DATA := {
 	"sound_enabled": true,
 	"haptics_enabled": true,
 	"onboarding_seen": false,
+	"remove_ads": false,
+	"ad_completed_runs": 0,
+	"ad_runs_since_interstitial": 0,
+	"ad_last_interstitial_unix": -999999999,
+	"ad_last_rewarded_unix": -999999999,
 	"unlocked_upgrades": [
 		"turbo_belts",
 		"flow_buffer",

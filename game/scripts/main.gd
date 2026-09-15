@@ -3,6 +3,14 @@ extends Control
 enum ScreenState { MENU, RUN, RESULTS }
 
 const CONTRACT_BONUS := 500
+const LICENSES := [
+	["checkpoint_scan", "CHECKPOINT SCAN", "Next 2 mistakes keep your chain.", 300],
+	["priority_contract", "PRIORITY CONTRACT", "One cargo type becomes worth double.", 700],
+	["calm_protocol", "CALM PROTOCOL", "Slower belts, but lower score.", 900],
+	["fragile_handling", "FRAGILE HANDLING", "Fragile cargo becomes safer and pays more.", 1100],
+	["express_bonus", "EXPRESS BONUS", "Express parcels become high-value cargo.", 1400],
+	["chain_pay", "CHAIN PAY", "Long clean chains become more valuable.", 1800]
+]
 
 var save_data: Dictionary
 var current_state := ScreenState.MENU
@@ -12,6 +20,7 @@ var last_delivered := 0
 var last_mistakes := 0
 var last_completed := false
 var last_contract_bonus := 0
+var last_daily_bonus := 0
 var run_phase := 1
 
 var content: Control
@@ -28,10 +37,14 @@ func _ready() -> void:
 	sfx = SynthSfx.new()
 	add_child(sfx)
 	save_data = SaveStore.load_data()
+	sfx.set_enabled(bool(save_data.get("sound_enabled", true)))
 	if _ensure_weekly_contract():
 		SaveStore.save_data(save_data)
 	_build_shell()
-	_show_menu()
+	if bool(save_data.get("onboarding_seen", false)):
+		_show_menu()
+	else:
+		_show_onboarding()
 
 func _build_shell() -> void:
 	var bg := ColorRect.new()
@@ -57,6 +70,60 @@ func _clear_content() -> void:
 	board = null
 	upgrade_overlay = null
 
+func _show_onboarding() -> void:
+	_clear_content()
+	var root := VBoxContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 30)
+	content.add_child(root)
+
+	var spacer_top := Control.new()
+	spacer_top.custom_minimum_size.y = 170
+	root.add_child(spacer_top)
+
+	var kicker := _label("NIGHT LOGISTICS // FIRST SHIFT", 22, NightTheme.AMBER)
+	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(kicker)
+
+	var title := _label("Three things.", 58, NightTheme.TEXT)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(title)
+
+	for line in [
+		"1  TAP the round junctions to switch the route.",
+		"2  MATCH both the color and the shape on each parcel.",
+		"3  THREE errors stop a standard shift. Traffic gets faster."
+	]:
+		var card := PanelContainer.new()
+		var style := StyleBoxFlat.new()
+		style.bg_color = NightTheme.PANEL
+		style.border_color = NightTheme.STEEL
+		style.set_border_width_all(2)
+		style.corner_radius_top_left = 10
+		style.corner_radius_top_right = 10
+		style.corner_radius_bottom_left = 10
+		style.corner_radius_bottom_right = 10
+		card.add_theme_stylebox_override("panel", style)
+		var label := _label(line, 28, NightTheme.TEXT)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.custom_minimum_size = Vector2(0, 145)
+		card.add_child(label)
+		root.add_child(card)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(spacer)
+
+	var understood := _button("START WORK")
+	understood.pressed.connect(_finish_onboarding)
+	root.add_child(understood)
+
+func _finish_onboarding() -> void:
+	save_data["onboarding_seen"] = true
+	SaveStore.save_data(save_data)
+	_show_menu()
+
 func _show_menu() -> void:
 	current_state = ScreenState.MENU
 	_ensure_weekly_contract()
@@ -64,47 +131,41 @@ func _show_menu() -> void:
 
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 20)
+	root.add_theme_constant_override("separation", 16)
 	content.add_child(root)
 
 	var spacer_top := Control.new()
-	spacer_top.custom_minimum_size.y = 80
+	spacer_top.custom_minimum_size.y = 35
 	root.add_child(spacer_top)
 
-	var kicker := _label("NIGHT LOGISTICS // HUB A", 24, NightTheme.AMBER)
+	var kicker := _label("NIGHT LOGISTICS // HUB A", 22, NightTheme.AMBER)
 	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(kicker)
 
-	var title := _label("NIGHT\nSORT", 82, NightTheme.TEXT)
+	var title := _label("NIGHT\nSORT", 72, NightTheme.TEXT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_constant_override("line_spacing", -10)
+	title.add_theme_constant_override("line_spacing", -12)
 	root.add_child(title)
 
-	var rule := HSeparator.new()
-	rule.modulate = NightTheme.STEEL_LIGHT
-	root.add_child(rule)
-
-	var subtitle := _label("Route every parcel before the line breaks.", 28, NightTheme.TEXT_DIM)
+	var subtitle := _label(
+		"%s  //  SORTED %d  //  STREAK %d" % [
+			_career_rank(),
+			int(save_data.get("total_delivered", 0)),
+			int(save_data.get("daily_streak", 0))
+		],
+		21,
+		NightTheme.TEXT_DIM
+	)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(subtitle)
 
-	var instruction := _label(
-		"Tap the round junctions. Match color + shape to the three gates.\nEvery 30 seconds, choose how the line evolves.",
-		25,
-		NightTheme.TEXT
-	)
-	instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	instruction.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	instruction.custom_minimum_size.y = 135
-	root.add_child(instruction)
-
 	var stats := _label(
-		"BEST  %06d    //    CREDITS  %05d" % [
+		"BEST %06d  //  ENDLESS %06d  //  CREDITS %05d" % [
 			int(save_data["best_score"]),
+			int(save_data.get("endless_best", 0)),
 			int(save_data["total_credits"])
 		],
-		23,
+		21,
 		NightTheme.TEXT_DIM
 	)
 	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -122,10 +183,10 @@ func _show_menu() -> void:
 	contract_panel.add_theme_stylebox_override("panel", contract_style)
 	root.add_child(contract_panel)
 
-	var contract_label := _label(_contract_status_text(), 21, NightTheme.TEXT_DIM)
+	var contract_label := _label(_contract_status_text(), 20, NightTheme.TEXT_DIM)
 	contract_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	contract_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	contract_label.custom_minimum_size.y = 92
+	contract_label.custom_minimum_size.y = 86
 	contract_panel.add_child(contract_label)
 
 	var spacer := Control.new()
@@ -133,85 +194,158 @@ func _show_menu() -> void:
 	root.add_child(spacer)
 
 	var start := _button("START SHIFT")
-	start.pressed.connect(func(): _start_run(false))
+	start.pressed.connect(func(): _start_run("normal"))
 	root.add_child(start)
 
 	var daily := _button("DAILY SHIFT")
-	daily.pressed.connect(func(): _start_run(true))
+	daily.pressed.connect(func(): _start_run("daily"))
 	root.add_child(daily)
 
-	var operations := _button("OPERATIONS LICENSES")
-	operations.custom_minimum_size.y = 82
-	operations.add_theme_font_size_override("font_size", 23)
-	operations.pressed.connect(_show_operations)
-	root.add_child(operations)
+	var endless := _button("ENDLESS SHIFT")
+	endless.pressed.connect(func(): _start_run("endless"))
+	root.add_child(endless)
 
-	var footer := _label("ONE THUMB // 90 SEC // THREE SECTORS", 20, NightTheme.TEXT_DIM)
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 16)
+	root.add_child(tools)
+
+	var operations := _button("LICENSES")
+	operations.custom_minimum_size.y = 76
+	operations.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	operations.add_theme_font_size_override("font_size", 21)
+	operations.pressed.connect(_show_operations)
+	tools.add_child(operations)
+
+	var settings := _button("SETTINGS")
+	settings.custom_minimum_size.y = 76
+	settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings.add_theme_font_size_override("font_size", 21)
+	settings.pressed.connect(_show_settings)
+	tools.add_child(settings)
+
+	var footer := _label("COLOR + SHAPE // ONE THUMB // NO ENERGY TIMER", 18, NightTheme.TEXT_DIM)
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(footer)
 
-func _show_operations() -> void:
+func _show_settings() -> void:
 	_clear_content()
 
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 22)
+	root.add_theme_constant_override("separation", 26)
 	content.add_child(root)
 
 	var spacer_top := Control.new()
-	spacer_top.custom_minimum_size.y = 90
+	spacer_top.custom_minimum_size.y = 160
 	root.add_child(spacer_top)
 
-	var kicker := _label("OPERATIONS // LICENSE DESK", 22, NightTheme.AMBER)
+	var kicker := _label("TERMINAL // SETTINGS", 22, NightTheme.AMBER)
 	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(kicker)
 
-	var title := _label("Expand the upgrade pool.", 48, NightTheme.TEXT)
+	var title := _label("Quiet controls.", 52, NightTheme.TEXT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(title)
 
-	var credits := _label("AVAILABLE CREDITS  %05d" % int(save_data["total_credits"]), 26, NightTheme.TEXT_DIM)
-	credits.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(credits)
+	var sound := _button("SOUND  //  %s" % ("ON" if bool(save_data["sound_enabled"]) else "OFF"))
+	sound.pressed.connect(_toggle_sound)
+	root.add_child(sound)
+
+	var haptics := _button("HAPTICS  //  %s" % ("ON" if bool(save_data["haptics_enabled"]) else "OFF"))
+	haptics.pressed.connect(_toggle_haptics)
+	root.add_child(haptics)
 
 	var info := _label(
-		"Licenses add new choices to future normal shifts. They are sidegrades, not permanent stat boosts. Daily Shift stays standardized for everyone.",
-		24,
+		"Destination colors always have a matching shape. Sound and vibration are never required to play.",
+		25,
 		NightTheme.TEXT_DIM
 	)
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.custom_minimum_size.y = 130
 	root.add_child(info)
-
-	var standard := _label(
-		"STANDARD ISSUE\nTurbo Belts // Flow Buffer // Spare Lane // Quality Pay",
-		23,
-		NightTheme.TEXT
-	)
-	standard.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(standard)
-
-	_add_license_button(
-		root,
-		"checkpoint_scan",
-		"CHECKPOINT SCAN",
-		"Next 2 mistakes keep your chain.",
-		300
-	)
-	_add_license_button(
-		root,
-		"priority_contract",
-		"PRIORITY CONTRACT",
-		"One cargo type becomes worth double for the shift.",
-		700
-	)
 
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(spacer)
 
 	var back := _button("BACK TO TERMINAL")
+	back.pressed.connect(_show_menu)
+	root.add_child(back)
+
+func _toggle_sound() -> void:
+	save_data["sound_enabled"] = not bool(save_data["sound_enabled"])
+	sfx.set_enabled(bool(save_data["sound_enabled"]))
+	SaveStore.save_data(save_data)
+	_show_settings()
+
+func _toggle_haptics() -> void:
+	save_data["haptics_enabled"] = not bool(save_data["haptics_enabled"])
+	SaveStore.save_data(save_data)
+	_show_settings()
+
+func _show_operations() -> void:
+	_clear_content()
+
+	var root := VBoxContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 16)
+	content.add_child(root)
+
+	var spacer_top := Control.new()
+	spacer_top.custom_minimum_size.y = 40
+	root.add_child(spacer_top)
+
+	var kicker := _label("OPERATIONS // LICENSE DESK", 21, NightTheme.AMBER)
+	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(kicker)
+
+	var title := _label("Expand the shift pool.", 42, NightTheme.TEXT)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(title)
+
+	var credits := _label("AVAILABLE CREDITS  %05d" % int(save_data["total_credits"]), 24, NightTheme.TEXT_DIM)
+	credits.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(credits)
+
+	var info := _label(
+		"Licenses add new choices. They do not add permanent power. Daily Shift stays standardized.",
+		21,
+		NightTheme.TEXT_DIM
+	)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(info)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(scroll)
+
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 12)
+	scroll.add_child(list)
+
+	var standard := _label(
+		"STANDARD ISSUE\nTurbo Belts // Flow Buffer // Spare Lane // Quality Pay",
+		21,
+		NightTheme.TEXT
+	)
+	standard.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	standard.custom_minimum_size.y = 88
+	list.add_child(standard)
+
+	for license in LICENSES:
+		_add_license_button(
+			list,
+			String(license[0]),
+			String(license[1]),
+			String(license[2]),
+			int(license[3])
+		)
+
+	var back := _button("BACK TO TERMINAL")
+	back.custom_minimum_size.y = 78
 	back.pressed.connect(_show_menu)
 	root.add_child(back)
 
@@ -229,8 +363,8 @@ func _add_license_button(
 		"OWNED" if owned else "UNLOCK  %d CREDITS" % cost
 	]
 	var button := _button(text_value)
-	button.custom_minimum_size.y = 170
-	button.add_theme_font_size_override("font_size", 22)
+	button.custom_minimum_size.y = 138
+	button.add_theme_font_size_override("font_size", 20)
 	button.disabled = owned or int(save_data["total_credits"]) < cost
 	if not owned:
 		button.pressed.connect(func(): _buy_license(upgrade_id, cost))
@@ -252,9 +386,9 @@ func _buy_license(upgrade_id: String, cost: int) -> void:
 	SaveStore.save_data(save_data)
 	_show_operations()
 
-func _start_run(daily: bool) -> void:
+func _start_run(mode: String) -> void:
 	current_state = ScreenState.RUN
-	current_mode = "daily" if daily else "normal"
+	current_mode = mode
 	run_phase = 1
 	_clear_content()
 
@@ -274,11 +408,13 @@ func _start_run(daily: bool) -> void:
 	score_label = _hud_cell(hud, "SCORE\n000000")
 	combo_label = _hud_cell(hud, "CHAIN\nX00")
 	mistakes_label = _hud_cell(hud, "ERROR\n0/3")
-	time_label = _hud_cell(hud, "TIME\n01:30")
+	time_label = _hud_cell(hud, "TIME\n00:00" if mode == "endless" else "TIME\n01:30")
 
 	board = SortBoard.new()
 	board.custom_minimum_size = Vector2(0, 1250)
 	board.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	board.configure_mode(mode)
+	board.set_haptics_enabled(bool(save_data.get("haptics_enabled", true)))
 	board.hud_changed.connect(_on_hud_changed)
 	board.run_finished.connect(_on_run_finished)
 	board.upgrade_requested.connect(_on_upgrade_requested)
@@ -286,26 +422,36 @@ func _start_run(daily: bool) -> void:
 	board.delivery_result.connect(_on_delivery_result)
 	root.add_child(board)
 
-	var hint := _label("TAP A JUNCTION BEFORE THE PARCEL REACHES IT", 20, NightTheme.TEXT_DIM)
+	var hint := _label(_run_hint(), 19, NightTheme.TEXT_DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(hint)
 
 	var quit := _button("END SHIFT")
-	quit.custom_minimum_size.y = 76
+	quit.custom_minimum_size.y = 72
 	quit.pressed.connect(_end_shift_early)
 	root.add_child(quit)
 
-	if daily:
+	if mode == "daily":
 		board.set_unlocked_upgrades(SortBoard.UPGRADE_IDS)
 	else:
 		board.set_unlocked_upgrades(save_data.get("unlocked_upgrades", []))
 
-	var seed_value := _daily_seed() if daily else int(Time.get_unix_time_from_system() * 1000.0) ^ randi()
+	var seed_value := _daily_seed() if mode == "daily" else int(Time.get_unix_time_from_system() * 1000.0) ^ randi()
 	board.start_run(seed_value)
 
+func _run_hint() -> String:
+	if current_mode == "endless":
+		return "NO CLOCK // SURVIVE THE FLOW // MODIFIERS APPEAR OVER TIME"
+	return "EXPRESS IS FAST // FRAGILE PUNISHES ERRORS // HEAVY IS SLOW"
+
 func _run_header() -> String:
-	var mode := "DAILY LINE" if current_mode == "daily" else "NIGHT SHIFT"
-	return "%s  //  SECTOR %d/3" % [mode, run_phase]
+	match current_mode:
+		"daily":
+			return "DAILY LINE  //  SECTOR %d/3" % mini(run_phase, 3)
+		"endless":
+			return "ENDLESS LINE  //  WAVE %02d" % run_phase
+		_:
+			return "NIGHT SHIFT  //  SECTOR %d/3" % mini(run_phase, 3)
 
 func _end_shift_early() -> void:
 	if board != null:
@@ -316,17 +462,17 @@ func _on_hud_changed(
 	new_score: int,
 	new_combo: int,
 	new_mistakes: int,
-	max_mistakes: int,
-	remaining: float
+	max_errors: int,
+	time_value: float
 ) -> void:
 	score_label.text = "SCORE\n%06d" % new_score
 	combo_label.text = "CHAIN\nX%02d" % new_combo
-	mistakes_label.text = "ERROR\n%d/%d" % [new_mistakes, max_mistakes]
-	var secs := maxi(0, int(ceil(remaining)))
+	mistakes_label.text = "ERROR\n%d/%d" % [new_mistakes, max_errors]
+	var secs := maxi(0, int(floor(time_value)))
 	time_label.text = "TIME\n%02d:%02d" % [secs / 60, secs % 60]
 	mistakes_label.add_theme_color_override(
 		"font_color",
-		NightTheme.DANGER if new_mistakes >= max_mistakes - 1 else NightTheme.TEXT
+		NightTheme.DANGER if new_mistakes >= max_errors - 1 else NightTheme.TEXT
 	)
 
 func _on_upgrade_requested(options: Array[String]) -> void:
@@ -382,7 +528,7 @@ func _show_upgrade_overlay(options: Array[String]) -> void:
 	box.add_child(title)
 
 	var explanation := _label(
-		"The line keeps moving after your choice. Some upgrades are safer; others pay more.",
+		"Safer choices usually pay less. Riskier choices can build a bigger score.",
 		23,
 		NightTheme.TEXT_DIM
 	)
@@ -407,7 +553,7 @@ func _choose_upgrade(upgrade_id: String) -> void:
 		return
 	board.apply_upgrade(upgrade_id)
 	sfx.play_upgrade()
-	run_phase = mini(3, run_phase + 1)
+	run_phase += 1
 	top_status_label.text = _run_header()
 	if upgrade_overlay != null:
 		upgrade_overlay.queue_free()
@@ -425,13 +571,24 @@ func _on_run_finished(final_score: int, delivered: int, final_mistakes: int, com
 	last_delivered = delivered
 	last_mistakes = final_mistakes
 	last_completed = completed
+	last_contract_bonus = 0
+	last_daily_bonus = 0
 
 	save_data["runs"] = int(save_data["runs"]) + 1
+	save_data["total_delivered"] = int(save_data.get("total_delivered", 0)) + delivered
+
 	var earned := delivered * 2 + int(final_score / 1000)
 	save_data["total_credits"] = int(save_data["total_credits"]) + earned
-	save_data["best_score"] = maxi(int(save_data["best_score"]), final_score)
+
+	if current_mode == "endless":
+		save_data["endless_best"] = maxi(int(save_data.get("endless_best", 0)), final_score)
+	else:
+		save_data["best_score"] = maxi(int(save_data["best_score"]), final_score)
+
 	if current_mode == "daily":
 		save_data["daily_best"] = maxi(int(save_data["daily_best"]), final_score)
+		last_daily_bonus = _update_daily_streak()
+		save_data["total_credits"] = int(save_data["total_credits"]) + last_daily_bonus
 
 	last_contract_bonus = _update_weekly_contract(final_score, delivered)
 	if last_contract_bonus > 0:
@@ -446,14 +603,16 @@ func _show_results(earned: int) -> void:
 
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 24)
+	root.add_theme_constant_override("separation", 22)
 	content.add_child(root)
 
 	var spacer_top := Control.new()
-	spacer_top.custom_minimum_size.y = 150
+	spacer_top.custom_minimum_size.y = 130
 	root.add_child(spacer_top)
 
 	var status_text := "SHIFT COMPLETE" if last_completed else "LINE STOPPED"
+	if current_mode == "endless":
+		status_text = "ENDLESS LINE STOPPED"
 	var status_color := NightTheme.GREEN if last_completed else NightTheme.RED
 	var status := _label(status_text, 30, status_color)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -463,22 +622,25 @@ func _show_results(earned: int) -> void:
 	score_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(score_title)
 
-	var big_score := _label("%06d" % last_score, 92, NightTheme.TEXT)
+	var big_score := _label("%06d" % last_score, 88, NightTheme.TEXT)
 	big_score.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(big_score)
 
+	var best_value := int(save_data.get("endless_best", 0)) if current_mode == "endless" else int(save_data["best_score"])
 	var summary_text := "SORTED  %03d\nERRORS  %d\nCREDITS  +%d\nBEST  %06d" % [
 		last_delivered,
 		last_mistakes,
 		earned,
-		int(save_data["best_score"])
+		best_value
 	]
+	if last_daily_bonus > 0:
+		summary_text += "\nDAILY STREAK BONUS  +%d" % last_daily_bonus
 	if last_contract_bonus > 0:
 		summary_text += "\nWEEKLY BONUS  +%d" % last_contract_bonus
 
-	var summary := _label(summary_text, 29, NightTheme.TEXT_DIM)
+	var summary := _label(summary_text, 28, NightTheme.TEXT_DIM)
 	summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	summary.add_theme_constant_override("line_spacing", 12)
+	summary.add_theme_constant_override("line_spacing", 11)
 	root.add_child(summary)
 
 	var spacer := Control.new()
@@ -486,21 +648,52 @@ func _show_results(earned: int) -> void:
 	root.add_child(spacer)
 
 	var again := _button("RUN AGAIN")
-	again.pressed.connect(func(): _start_run(current_mode == "daily"))
+	again.pressed.connect(func(): _start_run(current_mode))
 	root.add_child(again)
 
 	var terminal := _button("BACK TO TERMINAL")
 	terminal.pressed.connect(_show_menu)
 	root.add_child(terminal)
 
-	var footer := _label(
-		"REWARDED CONTINUE + AD SYSTEM: RESERVED FOR PRODUCTION BUILD",
-		18,
-		NightTheme.TEXT_DIM
-	)
-	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(footer)
+func _career_rank() -> String:
+	var total := int(save_data.get("total_delivered", 0))
+	if total >= 5000:
+		return "NIGHT CHIEF"
+	if total >= 1500:
+		return "CONTROLLER"
+	if total >= 500:
+		return "OPERATOR"
+	if total >= 100:
+		return "SORTER"
+	return "TRAINEE"
+
+func _today_day_number() -> int:
+	var date := Time.get_date_dict_from_system()
+	var noon := {
+		"year": int(date["year"]),
+		"month": int(date["month"]),
+		"day": int(date["day"]),
+		"hour": 12,
+		"minute": 0,
+		"second": 0
+	}
+	return int(floor(Time.get_unix_time_from_datetime_dict(noon) / 86400.0))
+
+func _update_daily_streak() -> int:
+	var today := _today_day_number()
+	var last_day := int(save_data.get("last_daily_day", -999999))
+	if last_day == today:
+		return 0
+
+	var streak := int(save_data.get("daily_streak", 0))
+	if last_day == today - 1:
+		streak += 1
+	else:
+		streak = 1
+
+	save_data["daily_streak"] = streak
+	save_data["last_daily_day"] = today
+	return 25 * mini(streak, 7)
 
 func _weekly_key() -> int:
 	var unix_time := Time.get_unix_time_from_system()
@@ -509,23 +702,11 @@ func _weekly_key() -> int:
 func _contract_definition() -> Dictionary:
 	match _weekly_key() % 3:
 		0:
-			return {
-				"kind": "deliver",
-				"title": "SORT 180 PARCELS",
-				"goal": 180
-			}
+			return {"kind": "deliver", "title": "SORT 180 PARCELS", "goal": 180}
 		1:
-			return {
-				"kind": "runs",
-				"title": "COMPLETE 8 SHIFTS",
-				"goal": 8
-			}
+			return {"kind": "runs", "title": "COMPLETE 8 SHIFTS", "goal": 8}
 		_:
-			return {
-				"kind": "score",
-				"title": "EARN 75,000 SCORE",
-				"goal": 75000
-			}
+			return {"kind": "score", "title": "EARN 75,000 SCORE", "goal": 75000}
 
 func _ensure_weekly_contract() -> bool:
 	var key := _weekly_key()
@@ -580,8 +761,8 @@ func _label(text_value: String, font_size: int, color: Color) -> Label:
 func _button(text_value: String) -> Button:
 	var button := Button.new()
 	button.text = text_value
-	button.custom_minimum_size = Vector2(0, 104)
-	button.add_theme_font_size_override("font_size", 28)
+	button.custom_minimum_size = Vector2(0, 96)
+	button.add_theme_font_size_override("font_size", 27)
 	button.add_theme_color_override("font_color", NightTheme.TEXT)
 	button.add_theme_color_override("font_hover_color", NightTheme.BG)
 	button.add_theme_color_override("font_pressed_color", NightTheme.BG)

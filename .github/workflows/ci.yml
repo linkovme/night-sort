@@ -38,10 +38,28 @@ jobs:
           sudo mv "Godot_v${VERSION}-stable_linux.x86_64" /usr/local/bin/godot
 
       - name: Import and parse project
-        run: godot --headless --path game --editor --quit
+        run: |
+          set -o pipefail
+          godot --headless --path game --editor --quit 2>&1 | tee /tmp/godot-import.log
+          if grep -Eiq "Parser Error|Parse Error|SCRIPT ERROR|Failed to load script" /tmp/godot-import.log; then
+            echo "Godot reported a script/parser error during import."
+            exit 1
+          fi
 
       - name: Ad policy tests
-        run: godot --headless --path game --script res://tests/ad_policy_test.gd
+        run: |
+          set -o pipefail
+          godot --headless --path game --script res://tests/ad_policy_test.gd 2>&1 | tee /tmp/godot-tests.log
+          if grep -Eiq "Parser Error|Parse Error|SCRIPT ERROR|Failed to load script|AdPolicy test failed" /tmp/godot-tests.log; then
+            echo "Godot reported a script/test error."
+            exit 1
+          fi
 
       - name: Launch smoke test
-        run: godot --headless --path game --quit-after 10
+        run: |
+          set -o pipefail
+          godot --headless --path game --quit-after 10 2>&1 | tee /tmp/godot-run.log
+          if grep -Eiq "Parser Error|Parse Error|SCRIPT ERROR|Failed to load script" /tmp/godot-run.log; then
+            echo "Godot reported a script/parser error during launch."
+            exit 1
+          fi

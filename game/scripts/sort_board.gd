@@ -62,6 +62,12 @@ var spawn_interval_multiplier := 1.0
 var speed_multiplier := 1.0
 var combo_guards := 0
 var priority_destination := -1
+var unlocked_upgrade_ids: Array[String] = [
+	"turbo_belts",
+	"flow_buffer",
+	"spare_lane",
+	"quality_pay"
+]
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -163,6 +169,15 @@ func get_upgrade_description(upgrade_id: String) -> String:
 func get_priority_destination() -> int:
 	return priority_destination
 
+func set_unlocked_upgrades(values: Array) -> void:
+	var filtered: Array[String] = []
+	for value in values:
+		var id := String(value)
+		if id in UPGRADE_IDS and id not in filtered:
+			filtered.append(id)
+	if filtered.size() >= 3:
+		unlocked_upgrade_ids = filtered
+
 func _process(delta: float) -> void:
 	if not running or paused_for_upgrade:
 		return
@@ -197,7 +212,7 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _pick_upgrade_options() -> Array[String]:
-	var pool: Array[String] = UPGRADE_IDS.duplicate()
+	var pool: Array[String] = unlocked_upgrade_ids.duplicate()
 	var options: Array[String] = []
 	while options.size() < 3 and not pool.is_empty():
 		var index := rng.randi_range(0, pool.size() - 1)

@@ -565,7 +565,8 @@ func _draw_gate(node_id: int, destination: int) -> void:
 	var scale_factor := minf(size.x, size.y) / 1000.0
 	var gate_size := Vector2(110.0, 70.0) * scale_factor
 	var rect := Rect2(p - gate_size * 0.5, gate_size)
-	draw_rect(rect.translated(Vector2(0, 8) * scale_factor), NightTheme.SHADOW)
+	var gate_shadow := Rect2(rect.position + Vector2(0, 8) * scale_factor, rect.size)
+	draw_rect(gate_shadow, NightTheme.SHADOW)
 	draw_rect(rect.grow(8.0 * scale_factor), NightTheme.STEEL_LIGHT)
 	draw_rect(rect, NightTheme.STEEL)
 	var inner := rect.grow(-8.0 * scale_factor)
@@ -605,7 +606,8 @@ func _draw_parcel(parcel: Dictionary) -> void:
 	var rect := Rect2(p - box_size * 0.5, box_size)
 	var modifier := String(parcel.get("modifier", "standard"))
 
-	draw_rect(rect.translated(Vector2(0, 5) * scale_factor), NightTheme.SHADOW)
+	var parcel_shadow := Rect2(rect.position + Vector2(0, 5) * scale_factor, rect.size)
+	draw_rect(parcel_shadow, NightTheme.SHADOW)
 	draw_rect(rect, NightTheme.PARCEL_EDGE)
 	draw_rect(rect.grow(-4.0 * scale_factor), NightTheme.PARCEL)
 	draw_line(

@@ -9,7 +9,13 @@ const DEFAULT_DATA := {
 	"daily_best": 0,
 	"contract_week": -1,
 	"contract_progress": 0,
-	"contract_claimed": false
+	"contract_claimed": false,
+	"unlocked_upgrades": [
+		"turbo_belts",
+		"flow_buffer",
+		"spare_lane",
+		"quality_pay"
+	]
 }
 
 static func load_data() -> Dictionary:

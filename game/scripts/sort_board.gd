@@ -442,7 +442,8 @@ func _gui_input(event: InputEvent) -> void:
 		return
 
 	var radius := minf(size.x, size.y) * 0.075
-	for node_id in [NODE_SWITCH_TOP, NODE_SWITCH_LEFT, NODE_SWITCH_RIGHT]:
+	var switch_nodes: Array[int] = [NODE_SWITCH_TOP, NODE_SWITCH_LEFT, NODE_SWITCH_RIGHT]
+	for node_id: int in switch_nodes:
 		if press_pos.distance_to(_node_pos(node_id)) <= radius:
 			switch_state[node_id] = 1 - int(switch_state[node_id])
 			if haptics_enabled:
@@ -471,18 +472,20 @@ func _draw() -> void:
 	draw_rect(Rect2(22, 22, size.x - 44, size.y - 44), NightTheme.STEEL, false, 2.0)
 
 	# Corner bolts.
-	for p in [
+	var corner_bolts: Array[Vector2] = [
 		Vector2(35, 35),
 		Vector2(size.x - 35, 35),
 		Vector2(35, size.y - 35),
 		Vector2(size.x - 35, size.y - 35)
-	]:
+	]
+	for p: Vector2 in corner_bolts:
 		draw_circle(p, 5.5, NightTheme.STEEL_LIGHT)
 		draw_circle(p, 2.0, NightTheme.BG)
 
 	# Subtle floor lanes under the mechanism.
-	for y_ratio in [0.18, 0.42, 0.68, 0.84]:
-		var y := size.y * y_ratio
+	var lane_ratios: Array[float] = [0.18, 0.42, 0.68, 0.84]
+	for y_ratio: float in lane_ratios:
+		var y: float = size.y * y_ratio
 		draw_line(
 			Vector2(42, y),
 			Vector2(size.x - 42, y),
@@ -490,7 +493,7 @@ func _draw() -> void:
 			2.0
 		)
 
-	var edges := [
+	var edges: Array[Array] = [
 		[NODE_SPAWN, NODE_SWITCH_TOP],
 		[NODE_SWITCH_TOP, NODE_SWITCH_LEFT],
 		[NODE_SWITCH_TOP, NODE_SWITCH_RIGHT],
@@ -500,10 +503,11 @@ func _draw() -> void:
 		[NODE_SWITCH_RIGHT, NODE_BLUE]
 	]
 
-	for edge in edges:
-		_draw_belt(edge[0], edge[1])
+	for edge: Array in edges:
+		_draw_belt(int(edge[0]), int(edge[1]))
 
-	for node_id in [NODE_SWITCH_TOP, NODE_SWITCH_LEFT, NODE_SWITCH_RIGHT]:
+	var switch_nodes: Array[int] = [NODE_SWITCH_TOP, NODE_SWITCH_LEFT, NODE_SWITCH_RIGHT]
+	for node_id: int in switch_nodes:
 		_draw_switch(node_id)
 
 	_draw_gate(NODE_RED, 0)
@@ -663,7 +667,8 @@ func _draw_parcel(parcel: Dictionary) -> void:
 func _draw_priority_marker() -> void:
 	if priority_destination < 0:
 		return
-	var p := _node_pos([NODE_RED, NODE_GREEN, NODE_BLUE][priority_destination])
+	var gate_nodes: Array[int] = [NODE_RED, NODE_GREEN, NODE_BLUE]
+	var p: Vector2 = _node_pos(gate_nodes[priority_destination])
 	var scale_factor := minf(size.x, size.y) / 1000.0
 	draw_circle(p + Vector2(0, -62.0 * scale_factor), 8.0 * scale_factor, NightTheme.AMBER)
 

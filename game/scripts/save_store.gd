@@ -6,7 +6,10 @@ const DEFAULT_DATA := {
 	"best_score": 0,
 	"total_credits": 0,
 	"runs": 0,
-	"daily_best": 0
+	"daily_best": 0,
+	"contract_week": -1,
+	"contract_progress": 0,
+	"contract_claimed": false
 }
 
 static func load_data() -> Dictionary:

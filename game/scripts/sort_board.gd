@@ -1,7 +1,7 @@
 class_name SortBoard
 extends Control
 
-signal hud_changed(score: int, combo: int, mistakes: int, max_mistakes: int, remaining: float)
+signal hud_changed(score: int, combo: int, mistakes: int, max_mistakes: int, time_value: float)
 signal run_finished(score: int, delivered: int, mistakes: int, completed: bool)
 signal upgrade_requested(options: Array[String])
 signal switch_toggled
@@ -15,8 +15,7 @@ const NODE_RED := 4
 const NODE_GREEN := 5
 const NODE_BLUE := 6
 
-const RUN_DURATION := 90.0
-const UPGRADE_TIMES := [30.0, 60.0]
+const STANDARD_DURATION := 90.0
 
 const UPGRADE_IDS := [
 	"turbo_belts",
@@ -24,7 +23,11 @@ const UPGRADE_IDS := [
 	"spare_lane",
 	"checkpoint_scan",
 	"quality_pay",
-	"priority_contract"
+	"priority_contract",
+	"calm_protocol",
+	"fragile_handling",
+	"express_bonus",
+	"chain_pay"
 ]
 
 var node_uv := {
@@ -47,6 +50,8 @@ var parcels: Array[Dictionary] = []
 var rng := RandomNumberGenerator.new()
 var running := false
 var paused_for_upgrade := false
+var endless_mode := false
+var haptics_enabled := true
 var elapsed := 0.0
 var spawn_clock := 0.0
 var score := 0
@@ -55,7 +60,9 @@ var mistakes := 0
 var delivered := 0
 var parcel_serial := 0
 var _last_hud_second := -1
-var upgrade_index := 0
+var upgrade_count := 0
+var next_upgrade_at := 30.0
+var upgrade_interval := 30.0
 
 var max_mistakes := 3
 var score_multiplier := 1.0
@@ -64,6 +71,10 @@ var spawn_interval_multiplier := 1.0
 var speed_multiplier := 1.0
 var combo_guards := 0
 var priority_destination := -1
+var fragile_protection := false
+var express_score_multiplier := 1.0
+var combo_bonus_multiplier := 1.0
+
 var unlocked_upgrade_ids: Array[String] = [
 	"turbo_belts",
 	"flow_buffer",
@@ -75,6 +86,13 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_process(true)
 	queue_redraw()
+
+func configure_mode(mode: String) -> void:
+	endless_mode = mode == "endless"
+	upgrade_interval = 45.0 if endless_mode else 30.0
+
+func set_haptics_enabled(value: bool) -> void:
+	haptics_enabled = value
 
 func start_run(seed_value: int) -> void:
 	rng.seed = seed_value
@@ -90,7 +108,8 @@ func start_run(seed_value: int) -> void:
 	delivered = 0
 	parcel_serial = 0
 	_last_hud_second = -1
-	upgrade_index = 0
+	upgrade_count = 0
+	next_upgrade_at = upgrade_interval
 	max_mistakes = 3
 	score_multiplier = 1.0
 	base_score_bonus = 0
@@ -98,6 +117,9 @@ func start_run(seed_value: int) -> void:
 	speed_multiplier = 1.0
 	combo_guards = 0
 	priority_destination = -1
+	fragile_protection = false
+	express_score_multiplier = 1.0
+	combo_bonus_multiplier = 1.0
 	paused_for_upgrade = false
 	running = true
 	_emit_hud()
@@ -126,6 +148,15 @@ func apply_upgrade(upgrade_id: String) -> void:
 			base_score_bonus += 35
 		"priority_contract":
 			priority_destination = rng.randi_range(0, 2)
+		"calm_protocol":
+			speed_multiplier *= 0.88
+			score_multiplier *= 0.88
+		"fragile_handling":
+			fragile_protection = true
+		"express_bonus":
+			express_score_multiplier *= 1.65
+		"chain_pay":
+			combo_bonus_multiplier *= 1.65
 		_:
 			pass
 
@@ -136,40 +167,31 @@ func apply_upgrade(upgrade_id: String) -> void:
 
 func get_upgrade_title(upgrade_id: String) -> String:
 	match upgrade_id:
-		"turbo_belts":
-			return "TURBO BELTS"
-		"flow_buffer":
-			return "FLOW BUFFER"
-		"spare_lane":
-			return "SPARE LANE"
-		"checkpoint_scan":
-			return "CHECKPOINT SCAN"
-		"quality_pay":
-			return "QUALITY PAY"
-		"priority_contract":
-			return "PRIORITY CONTRACT"
-		_:
-			return "UNKNOWN"
+		"turbo_belts": return "TURBO BELTS"
+		"flow_buffer": return "FLOW BUFFER"
+		"spare_lane": return "SPARE LANE"
+		"checkpoint_scan": return "CHECKPOINT SCAN"
+		"quality_pay": return "QUALITY PAY"
+		"priority_contract": return "PRIORITY CONTRACT"
+		"calm_protocol": return "CALM PROTOCOL"
+		"fragile_handling": return "FRAGILE HANDLING"
+		"express_bonus": return "EXPRESS BONUS"
+		"chain_pay": return "CHAIN PAY"
+		_: return "UNKNOWN"
 
 func get_upgrade_description(upgrade_id: String) -> String:
 	match upgrade_id:
-		"turbo_belts":
-			return "+30% score  //  +15% belt speed"
-		"flow_buffer":
-			return "+12% time between parcels  //  -10% score"
-		"spare_lane":
-			return "+1 error capacity  //  -8% score"
-		"checkpoint_scan":
-			return "Next 2 mistakes keep your chain"
-		"quality_pay":
-			return "+35 points for every correct parcel"
-		"priority_contract":
-			return "One cargo type becomes worth double"
-		_:
-			return ""
-
-func get_priority_destination() -> int:
-	return priority_destination
+		"turbo_belts": return "+30% score  //  +15% belt speed"
+		"flow_buffer": return "+12% parcel spacing  //  -10% score"
+		"spare_lane": return "+1 error capacity  //  -8% score"
+		"checkpoint_scan": return "Next 2 mistakes keep your chain"
+		"quality_pay": return "+35 points for every correct parcel"
+		"priority_contract": return "One cargo type becomes worth double"
+		"calm_protocol": return "-12% belt speed  //  -12% score"
+		"fragile_handling": return "Fragile errors cost 1  //  fragile score +35%"
+		"express_bonus": return "Express parcels pay +65% more"
+		"chain_pay": return "Combo portion of score grows +65%"
+		_: return ""
 
 func set_unlocked_upgrades(values: Array) -> void:
 	var filtered: Array[String] = []
@@ -186,29 +208,32 @@ func _process(delta: float) -> void:
 
 	elapsed += delta
 
-	if upgrade_index < UPGRADE_TIMES.size() and elapsed >= UPGRADE_TIMES[upgrade_index]:
+	var can_offer_upgrade := endless_mode or next_upgrade_at < STANDARD_DURATION - 0.1
+	if can_offer_upgrade and elapsed >= next_upgrade_at:
 		paused_for_upgrade = true
 		var options := _pick_upgrade_options()
-		upgrade_index += 1
+		upgrade_count += 1
+		next_upgrade_at += upgrade_interval
 		upgrade_requested.emit(options)
 		return
 
-	var remaining := maxf(0.0, RUN_DURATION - elapsed)
+	var remaining := maxf(0.0, STANDARD_DURATION - elapsed)
 	spawn_clock -= delta
 
-	if spawn_clock <= 0.0 and remaining > 0.0:
+	if spawn_clock <= 0.0 and (endless_mode or remaining > 0.0):
 		_spawn_parcel()
 		spawn_clock += _current_spawn_interval()
 
 	for parcel in parcels.duplicate():
 		_advance_parcel(parcel, delta)
 
-	var current_second := int(ceil(remaining))
+	var time_value := elapsed if endless_mode else remaining
+	var current_second := int(floor(time_value))
 	if current_second != _last_hud_second:
 		_last_hud_second = current_second
 		_emit_hud()
 
-	if remaining <= 0.0:
+	if not endless_mode and remaining <= 0.0:
 		_finish_run(true)
 
 	queue_redraw()
@@ -222,22 +247,50 @@ func _pick_upgrade_options() -> Array[String]:
 		pool.remove_at(index)
 	return options
 
+func _difficulty_progress() -> float:
+	if endless_mode:
+		return clampf(elapsed / 240.0, 0.0, 1.0)
+	return clampf(elapsed / STANDARD_DURATION, 0.0, 1.0)
+
 func _current_spawn_interval() -> float:
-	var t := clampf(elapsed / RUN_DURATION, 0.0, 1.0)
-	return lerpf(1.55, 0.62, t) * spawn_interval_multiplier
+	var t := _difficulty_progress()
+	return lerpf(1.55, 0.58, t) * spawn_interval_multiplier
 
 func _current_speed() -> float:
-	var t := clampf(elapsed / RUN_DURATION, 0.0, 1.0)
-	return lerpf(0.24, 0.36, t) * speed_multiplier
+	var t := _difficulty_progress()
+	return lerpf(0.24, 0.38, t) * speed_multiplier
 
 func _spawn_parcel() -> void:
 	var dest := rng.randi_range(0, 2)
+	var modifier := "standard"
+	var speed_factor := 1.0
+	var point_factor := 1.0
+	var mistake_cost := 1
+
+	var roll := rng.randf()
+	if elapsed >= 50.0 and roll < 0.10:
+		modifier = "heavy"
+		speed_factor = 0.74
+		point_factor = 1.35
+	elif elapsed >= 35.0 and roll < 0.23:
+		modifier = "fragile"
+		point_factor = 1.75
+		mistake_cost = 2
+	elif elapsed >= 20.0 and roll < 0.40:
+		modifier = "express"
+		speed_factor = 1.38
+		point_factor = 1.45
+
 	var parcel := {
 		"id": parcel_serial,
 		"destination": dest,
 		"from": NODE_SPAWN,
 		"to": NODE_SWITCH_TOP,
-		"progress": 0.0
+		"progress": 0.0,
+		"modifier": modifier,
+		"speed_factor": speed_factor,
+		"point_factor": point_factor,
+		"mistake_cost": mistake_cost
 	}
 	parcel_serial += 1
 	parcels.append(parcel)
@@ -246,7 +299,8 @@ func _advance_parcel(parcel: Dictionary, delta: float) -> void:
 	var from_pos := node_uv[parcel["from"]] as Vector2
 	var to_pos := node_uv[parcel["to"]] as Vector2
 	var segment_length := maxf(0.01, from_pos.distance_to(to_pos))
-	parcel["progress"] += delta * _current_speed() / segment_length
+	var parcel_speed := _current_speed() * float(parcel.get("speed_factor", 1.0))
+	parcel["progress"] += delta * parcel_speed / segment_length
 
 	if parcel["progress"] < 1.0:
 		return
@@ -279,16 +333,27 @@ func _deliver(parcel: Dictionary, gate_node: int) -> void:
 	elif gate_node == NODE_BLUE:
 		gate_destination = 2
 
+	var modifier := String(parcel.get("modifier", "standard"))
 	var correct := int(parcel["destination"]) == gate_destination
+
 	if correct:
 		combo += 1
 		delivered += 1
-		var raw_points := 100 + base_score_bonus + mini(combo, 25) * 8
+		var combo_points := int(round(float(mini(combo, 25) * 8) * combo_bonus_multiplier))
+		var raw_points := 100 + base_score_bonus + combo_points
+		var parcel_factor := float(parcel.get("point_factor", 1.0))
+		if modifier == "express":
+			parcel_factor *= express_score_multiplier
+		elif modifier == "fragile" and fragile_protection:
+			parcel_factor *= 1.35
 		if priority_destination == int(parcel["destination"]):
-			raw_points *= 2
-		score += int(round(float(raw_points) * score_multiplier))
+			parcel_factor *= 2.0
+		score += int(round(float(raw_points) * score_multiplier * parcel_factor))
 	else:
-		mistakes += 1
+		var cost := int(parcel.get("mistake_cost", 1))
+		if modifier == "fragile" and fragile_protection:
+			cost = 1
+		mistakes += cost
 		if combo_guards > 0:
 			combo_guards -= 1
 		else:
@@ -309,8 +374,8 @@ func _finish_run(completed: bool) -> void:
 	run_finished.emit(score, delivered, mistakes, completed)
 
 func _emit_hud() -> void:
-	var remaining := maxf(0.0, RUN_DURATION - elapsed)
-	hud_changed.emit(score, combo, mistakes, max_mistakes, remaining)
+	var time_value := elapsed if endless_mode else maxf(0.0, STANDARD_DURATION - elapsed)
+	hud_changed.emit(score, combo, mistakes, max_mistakes, time_value)
 
 func _gui_input(event: InputEvent) -> void:
 	if not running or paused_for_upgrade:
@@ -336,7 +401,8 @@ func _gui_input(event: InputEvent) -> void:
 	for node_id in [NODE_SWITCH_TOP, NODE_SWITCH_LEFT, NODE_SWITCH_RIGHT]:
 		if press_pos.distance_to(_node_pos(node_id)) <= radius:
 			switch_state[node_id] = 1 - int(switch_state[node_id])
-			Input.vibrate_handheld(18)
+			if haptics_enabled:
+				Input.vibrate_handheld(18)
 			switch_toggled.emit()
 			queue_redraw()
 			accept_event()
@@ -432,23 +498,72 @@ func _draw_spawn() -> void:
 	var w := 105.0 * scale_factor
 	var h := 45.0 * scale_factor
 	draw_rect(Rect2(p - Vector2(w * 0.5, h * 0.5), Vector2(w, h)), NightTheme.STEEL_LIGHT)
-	draw_line(p - Vector2(w * 0.28, 0), p + Vector2(w * 0.28, 0), NightTheme.TEXT, 4.0 * scale_factor, true)
+	draw_line(
+		p - Vector2(w * 0.28, 0),
+		p + Vector2(w * 0.28, 0),
+		NightTheme.TEXT,
+		4.0 * scale_factor,
+		true
+	)
 
 func _draw_parcel(parcel: Dictionary) -> void:
 	var p := _parcel_pos(parcel)
 	var scale_factor := minf(size.x, size.y) / 1000.0
 	var box_size := Vector2(58.0, 46.0) * scale_factor
 	var rect := Rect2(p - box_size * 0.5, box_size)
+	var modifier := String(parcel.get("modifier", "standard"))
+
 	draw_rect(rect, NightTheme.PARCEL_EDGE)
 	draw_rect(rect.grow(-4.0 * scale_factor), NightTheme.PARCEL)
+
+	if modifier == "heavy":
+		draw_rect(rect.grow(3.0 * scale_factor), NightTheme.STEEL_LIGHT, false, 3.0 * scale_factor)
+	elif modifier == "express":
+		var top_y := rect.position.y + 7.0 * scale_factor
+		draw_line(
+			Vector2(rect.position.x + 5.0 * scale_factor, top_y),
+			Vector2(rect.position.x + 18.0 * scale_factor, top_y),
+			NightTheme.AMBER,
+			3.0 * scale_factor,
+			true
+		)
+		draw_line(
+			Vector2(rect.position.x + 5.0 * scale_factor, top_y + 6.0 * scale_factor),
+			Vector2(rect.position.x + 18.0 * scale_factor, top_y + 6.0 * scale_factor),
+			NightTheme.AMBER,
+			3.0 * scale_factor,
+			true
+		)
+	elif modifier == "fragile":
+		var mark := p + Vector2(-box_size.x * 0.34, -box_size.y * 0.27)
+		draw_line(
+			mark + Vector2(-5, -5) * scale_factor,
+			mark + Vector2(5, 5) * scale_factor,
+			NightTheme.TEXT,
+			2.5 * scale_factor,
+			true
+		)
+		draw_line(
+			mark + Vector2(5, -5) * scale_factor,
+			mark + Vector2(-5, 5) * scale_factor,
+			NightTheme.TEXT,
+			2.5 * scale_factor,
+			true
+		)
+
 	_draw_destination_mark(
 		p,
 		parcel["destination"],
 		13.0 * scale_factor,
 		NightTheme.DEST_COLORS[parcel["destination"]]
 	)
+
 	if priority_destination == int(parcel["destination"]):
-		draw_circle(p + Vector2(box_size.x * 0.42, -box_size.y * 0.40), 6.0 * scale_factor, NightTheme.AMBER)
+		draw_circle(
+			p + Vector2(box_size.x * 0.42, -box_size.y * 0.40),
+			6.0 * scale_factor,
+			NightTheme.AMBER
+		)
 
 func _draw_priority_marker() -> void:
 	if priority_destination < 0:

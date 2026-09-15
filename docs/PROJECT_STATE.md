@@ -1,12 +1,15 @@
 # PROJECT STATE
 
 **Project:** Night Sort  
-**Stage:** Milestone 1 — playable Android alpha, retention expansion  
+**Stage:** Milestone 1 — playable Android alpha, UX and retention expansion  
 **Engine:** Godot 4.7.2 stable  
 **Primary platform:** Android portrait  
 **Current playable version:** 0.1.0-alpha
 
 ## WORKING
+- Russian is now the default player-facing language.
+- First 3 Normal Shifts use a beginner assist profile: 5 errors, slower flow, fixed opening parcel sequence, delayed modifiers and gate highlighting.
+- Procedural warehouse backdrop, richer panels, lighting, racks, floor markings and upgraded conveyor visuals.
 - Fully runnable Godot project.
 - Android debug APK is built automatically by GitHub Actions.
 - 90-second Normal Shift.
@@ -44,6 +47,9 @@ Milestone 1 expands replayability without making controls more complicated.
 7. Polish balance after device playtesting.
 8. Prepare production Android path: Gradle/AAB, target API required by Google Play, release signing, consent/analytics, then live ad SDK.
 
+## LATEST PLAYER FEEDBACK RESPONSE
+2026-09-15 — First hands-on feedback: English-only UI, opening difficulty too high, visuals felt too sparse. Response shipped in main: Russian UI, beginner onboarding/ramp, richer industrial presentation. Godot smoke test PASS.
+
 ## KNOWN LIMITATIONS
 - This is a real installable alpha, not yet a Play Store production release.
 - Live ads are intentionally not connected yet because production ad IDs/account consent configuration do not belong in public source.
@@ -55,4 +61,4 @@ Milestone 1 expands replayability without making controls more complicated.
 If a chat loses context, read `docs/START_HERE.md` and `docs/NEW_CHAT_PROMPT.md`. Do not reconstruct the project from conversation history.
 
 ## LAST DECISION
-2026-09-15 — Milestone 0 accepted as a real playable Android alpha after both smoke CI and Android APK export passed.
+2026-09-15 — First impression quality is now a release gate: Russian UX, gentle first-session difficulty and visual richness must be validated by hands-on play before adding more systems.

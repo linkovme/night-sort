@@ -1,32 +1,58 @@
 # PROJECT STATE
 
 **Project:** Night Sort  
-**Stage:** Milestone 0 — playable alpha construction  
+**Stage:** Milestone 1 — playable Android alpha, retention expansion  
 **Engine:** Godot 4.7.2 stable  
-**Primary platform:** Android portrait
+**Primary platform:** Android portrait  
+**Current playable version:** 0.1.0-alpha
 
 ## WORKING
-- GitHub repository initialized.
-- Source-of-truth documentation structure exists.
+- Fully runnable Godot project.
+- Android debug APK is built automatically by GitHub Actions.
+- 90-second Normal Shift.
+- Deterministic Daily Shift.
+- Three destinations using both color and shape.
+- Continuous parcel flow with three tappable routing junctions.
+- Score, combo, mistakes, difficulty ramp and local best score.
+- Two mid-run upgrade choices per shift.
+- Six upgrade types with tradeoffs/sidegrades.
+- Persistent credits.
+- Operations Licenses screen: credits unlock additional upgrade choices.
+- Rotating weekly contract with a credit reward.
+- Local save data.
+- Procedural industrial visuals and custom vector app icon.
+- Procedurally generated sound effects and switch haptics.
+- Automated Godot smoke test.
+- Automated Android debug APK build.
+
+## VERIFIED
+- Godot headless import/launch: PASS.
+- Android debug export: PASS.
+- Successful APK workflow run: https://github.com/linkovme/night-sort/actions/runs/34944190874
+- APK artifact name: `night-sort-debug-apk`.
 
 ## IN PROGRESS
-- First fully playable local gameplay loop.
-- Procedural visual style: no external art dependency for the alpha.
-- CI smoke check.
+Milestone 1 expands replayability without making controls more complicated.
 
 ## NEXT
-1. Add Godot project skeleton and main scene.
-2. Implement routing board, parcels, score/combo/mistakes and difficulty ramp.
-3. Implement menu, results, high score and local save.
-4. Add a deterministic Daily Shift mode.
-5. Add smoke CI and fix all parse/runtime errors it finds.
-6. Only after the core loop feels coherent: upgrades, contracts, audio, Android export and ad SDK integration.
+1. Add Endless Shift with its own persistent best score.
+2. Add parcel modifiers (express / fragile / heavy) with clear visual cues.
+3. Expand the upgrade pool while keeping sidegrade philosophy.
+4. Add Daily Shift streak and long-term career statistics.
+5. Add first-run onboarding and sound/haptic settings.
+6. Add ad-service abstraction and exact ad frequency rules without enabling a live ad network yet.
+7. Polish balance after device playtesting.
+8. Prepare production Android path: Gradle/AAB, target API required by Google Play, release signing, consent/analytics, then live ad SDK.
 
-## DEFINITION OF FIRST PLAYABLE
-A person can open the project, tap Start, understand the goal without a tutorial wall, play a complete run, lose or finish, see a score and replay.
+## KNOWN LIMITATIONS
+- This is a real installable alpha, not yet a Play Store production release.
+- Live ads are intentionally not connected yet because production ad IDs/account consent configuration do not belong in public source.
+- Production signing key and store credentials must never be committed to this public repository.
+- No online leaderboard/backend yet.
+- Current visual language is cohesive but intentionally minimal; production polish is still ahead.
 
-## KNOWN ISSUES
-None yet — code is being added.
+## RECOVERY RULE
+If a chat loses context, read `docs/START_HERE.md` and `docs/NEW_CHAT_PROMPT.md`. Do not reconstruct the project from conversation history.
 
 ## LAST DECISION
-2026-09-15 — Pin the project to Godot 4.7.2 stable rather than the 4.8 development builds.
+2026-09-15 — Milestone 0 accepted as a real playable Android alpha after both smoke CI and Android APK export passed.

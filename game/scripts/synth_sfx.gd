@@ -3,6 +3,11 @@ extends Node
 
 const SAMPLE_RATE := 22050
 
+var enabled := true
+
+func set_enabled(value: bool) -> void:
+	enabled = value
+
 func play_switch() -> void:
 	_play_tone(280.0, 0.035, 0.16)
 
@@ -30,6 +35,8 @@ func _play_tone(
 	volume: float,
 	delay: float = 0.0
 ) -> void:
+	if not enabled:
+		return
 	if delay > 0.0:
 		var timer := get_tree().create_timer(delay)
 		await timer.timeout

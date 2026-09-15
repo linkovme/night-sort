@@ -32,11 +32,15 @@ var time_label: Label
 var top_status_label: Label
 var upgrade_overlay: Control
 var sfx: SynthSfx
+var ads: AdService
 
 func _ready() -> void:
 	sfx = SynthSfx.new()
 	add_child(sfx)
+	ads = AdService.new()
+	add_child(ads)
 	save_data = SaveStore.load_data()
+	ads.configure(save_data)
 	sfx.set_enabled(bool(save_data.get("sound_enabled", true)))
 	if _ensure_weekly_contract():
 		SaveStore.save_data(save_data)
@@ -575,6 +579,7 @@ func _on_run_finished(final_score: int, delivered: int, final_mistakes: int, com
 	last_daily_bonus = 0
 
 	save_data["runs"] = int(save_data["runs"]) + 1
+	ads.record_completed_run()
 	save_data["total_delivered"] = int(save_data.get("total_delivered", 0)) + delivered
 
 	var earned := delivered * 2 + int(final_score / 1000)

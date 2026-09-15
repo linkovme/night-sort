@@ -19,18 +19,23 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        godot: ["4.7.1", "4.7.2"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Godot 4.7.2
+      - name: Download Godot ${{ matrix.godot }}
         run: |
-          wget -q "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip" -O godot.zip
+          VERSION="${{ matrix.godot }}"
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${VERSION}-stable/Godot_v${VERSION}-stable_linux.x86_64.zip" -O godot.zip
           unzip -q godot.zip
-          chmod +x Godot_v4.7.2-stable_linux.x86_64
-          sudo mv Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          chmod +x "Godot_v${VERSION}-stable_linux.x86_64"
+          sudo mv "Godot_v${VERSION}-stable_linux.x86_64" /usr/local/bin/godot
 
       - name: Import and parse project
         run: godot --headless --path game --editor --quit
